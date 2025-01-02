@@ -41,7 +41,7 @@ int main() {
     }else if (testing_func == 2) {
         int i, j;
         cout << "Cin i, j" << endl;
-        cin >> i, j;
+        cin >> i >> j;
 
         long double answer = matrix1.get_element(i, j);
         cout << "Result:" << endl;

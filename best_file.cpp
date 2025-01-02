@@ -10,62 +10,65 @@ using namespace std;
 class Matrix
 {
 private:
-	// ручной ввод матрицы
 	void write_matrix()
 	{
 		cin >> this->n >> this->m;
+		rowpointer.resize(n + 1, 0);
 		for (int i = 0; i < this->n; i++)
 		{
+			int cnt_of_not_zero_elements = 0;
 			for (int j = 0; j < this->m; j++)
 			{
-				long double element;
-				cin >> element;
-				if (element != 0)
+				long double value;
+				cin >> value;
+				if (value != 0)
 				{
-					this->elements.push_back(element);
-					this->indexI.push_back(i);
-					this->indexJ.push_back(j);
+					this->values.push_back(value);
+					this->col.push_back(j);
+					cnt_of_not_zero_elements++;
 				}
 			}
+			rowpointer[i + 1] = rowpointer[i] + cnt_of_not_zero_elements;
 		}
 	}
 
 public:
 	int n, m;
 	long double scalar = 1.0;
-	vector<long double> elements;
-	vector<int> indexI;
-	vector<int> indexJ;
+	vector<long double> values;
+	vector<int> col;
+	vector<int> rowpointer;
 	string path;
 
 	Matrix() = default;
-	Matrix(int n = 0, int m = 0, vector<long double> elements = {}, vector<int> indexI = {}, vector<int> indexJ = {}, string path = "") {
+	Matrix(int n = 0, int m = 0, vector<long double> values = {}, vector<int> col = {}, vector<int> rowpointer = {}, string path = "") {
         this->n = n;
         this->m = m;
         this->path = path;
 
-        //input either via file or via console (if both options are submitted, file is a priority)
-        if (!elements.empty()) {
-            this->elements = elements;
-            this->indexI = indexI;
-            this->indexJ = indexJ;
+        if (!values.empty()) {
+            this->values = values;
+            this->col = col;
+            this->rowpointer = rowpointer;
         } else if (!path.empty()) {
             ifstream file(path);
 
             file >> this->n >> this->m;
-            long double element;
+            long double value;
+			rowpointer.resize(n + 1, 0);
 
             for (int i = 0; i < this->n; ++i) {
+				int cnt_of_not_zero_elements = 0;
                 for (int j = 0; j < this->m; ++j) {
-                    file >> element;
-                    if (element != 0) {
-                        this->elements.push_back(element);
-                        this->indexI.push_back(i);
-                        this->indexJ.push_back(j);
+                    file >> value;
+                    if (value != 0) {
+                        this->values.push_back(value);
+                        this->col.push_back(j);
+						cnt_of_not_zero_elements++;
                     }
                 }
+				rowpointer[i + 1] = rowpointer[i] + cnt_of_not_zero_elements;
             }
-
             file.close();
         } else {
             write_matrix();
@@ -74,78 +77,104 @@ public:
 
 	long double get_trace() {
 		long double trace = 0;
-		for (int i = 0; i < elements.size(); i++) {
-			if (indexI[i] == indexJ[i]) {
-				trace += elements[i];
+		for (int i = 1; i < rowpointer.size(); i++)
+		{
+			for(int j = rowpointer[i - 1]; j < rowpointer[i]; j++)
+			{
+				// rowpointer[i] - right border, rowpointer[i - 1] - left border
+				// if the diagonal element by j coord not in [rowpointer[i - 1], rowpointer[i]) we can skip action
+				if(rowpointer[i] <= i || rowpointer[i - 1] > i)
+				{
+					continue;
+				}
+				if(col[j] == i - 1)
+				{
+					trace += values[j];
+				}
 			}
 		}
 
 		return trace * scalar;
 	}
 
-	long double get_element(int i, int j) {
-      i--; j--; // indexation
-      for (int idx = 0; idx < elements.size(); idx++)
-      {
-        if (indexI[idx] == i && indexJ[idx] == j)
-        {
-          return elements[idx] * scalar;
-        }
-      }
-      return 0;
+	long double get_element(int i, int j)
+	{
+		j--; // indexation, don't write i--;!!!
+		// if element not in our borders, it means that element value = 0
+		if(col[rowpointer[i - 1]] > j || col[rowpointer[i] - 1] < j)
+		{
+			return 0;
+		}
+		for(int value_index = rowpointer[i - 1]; value_index < rowpointer[i]; value_index++)
+		{
+			if(col[value_index] == j)
+			{
+				return values[value_index];
+			}
+		}
+		return 0;
     }
 
 	//function that transforms a sparse matrix into a dense one
 	vector<vector<long double>> to_vector() const {
         vector<vector<long double>> dense_matrix(n, vector<long double>(m, 0));
 
-        for (size_t i = 0; i < elements.size(); ++i) {
-            dense_matrix[indexI[i]][indexJ[i]] = elements[i] * scalar;
-        }
+		for(int i = 1; i < rowpointer.size(); i++)
+		{
+			for(int j = rowpointer[i - 1]; j < rowpointer[i]; j++)
+			{
+				dense_matrix[i - 1][col[j]] = values[j] * scalar;
+			}
+		}
 
         return dense_matrix;
     }
 };
-
-// вспомогательная функция для sum_of_matrix
-void write_map(Matrix& A, map<pair<int, int>, long double>& map) {
-	for (int i = 0; i < A.elements.size(); i++)
+// TODO: rename this function
+void get_matrix_column_sum(map<int, long double> &column_values, Matrix &matrix, int &col_index)
+{
+	for(int row_index = 0; row_index < matrix.n; row_index++)
 	{
-		pair<int, int> coord = { A.indexI[i], A.indexJ[i] };
-		map[coord] += A.elements[i] * A.scalar;
+		column_values[row_index] = matrix.get_element(row_index + 1, col_index);
 	}
 }
-
+// TODO: rename this function
+void get_matrix_string_sum(map<int, long double> &string_values, Matrix &matrix, int &rowpointer_index)
+{
+		for(int values_index = matrix.rowpointer[rowpointer_index - 1]; values_index < matrix.rowpointer[rowpointer_index]; values_index++)
+		{
+			string_values[matrix.col[values_index]] += matrix.values[values_index];
+		}
+}
+void merge_string_to_new_vectors(vector<long double> &new_values, vector<int> &new_col, map<int, long double> &string_values)
+{
+	for(pair<int, long double> string_elements : string_values)
+	{
+		int col = string_elements.first;
+		long double value = string_elements.second;
+		new_values.push_back(value);
+		new_col.push_back(col);
+	}
+}
 Matrix sum_of_matrix(Matrix& A, Matrix& B) {
 	if (A.n != B.n || A.m != B.m) {
-		// Обработать описание ошибки
 		cout << "Mistake";
 		return A;
 	}
 	int n = A.n;
 	int m = A.m;
-	vector<long double> elements;
-	vector<int> indexI;
-	vector<int> indexJ;
-	int indA = 0; // indicator A - указатель
-	int indB = 0; // indicator B - указатель
-	int end = max(A.elements.size(), B.elements.size());
-
-	// С помощью unordered_map
-	map<pair<int, int>, long double> map;
-	write_map(A, map);
-	write_map(B, map);
-
-	for (auto map_element : map)
+	vector<long double> new_values;
+	vector<int> new_col;
+	vector<int> new_rowpointer(n + 1, 0);
+	for(int rowpointer_index = 1; rowpointer_index < n + 1; rowpointer_index++)
 	{
-		pair<int, int> coord = map_element.first;
-		int matrix_element = map_element.second;
-		elements.push_back(matrix_element);
-		indexI.push_back(coord.first);
-		indexJ.push_back(coord.second);
+		map<int, long double> string_values;
+		get_matrix_string_sum(string_values, A, rowpointer_index);
+		get_matrix_string_sum(string_values, B, rowpointer_index);
+		merge_string_to_new_vectors(new_values, new_col, string_values);
+		new_rowpointer[rowpointer_index] = new_rowpointer[rowpointer_index - 1] + string_values.size();
 	}
-
-	Matrix C = Matrix(n, m, elements, indexI, indexJ);
+	Matrix C = Matrix(n, m, new_values, new_col, new_rowpointer);
 	return C;
 }
 
@@ -153,78 +182,45 @@ void multiply_scalar(int scalar, Matrix& A) {
 	A.scalar *= scalar;
 }
 
-vector<long double> get_vertical(Matrix& A, int j) {
-	vector<long double> vertical(A.n, 0);
-
-	for (int idx = 0; idx < A.elements.size(); idx++)
-	{
-		// Если нашли элемент по горизонтали, то в соответствующую вертикальную ячейку записываем сам элемент
-		if (A.indexJ[idx] == j)
-		{
-			// т.к. вектор вертикальный, то и обращаться нужно к A.indexI, т.к. этот вектор отвечает за вертикаль
-			vertical[A.indexI[idx]] = A.elements[idx] * A.scalar;
-		}
-	}
-
-	return vertical;
-}
-
-vector<long double> get_horizontal(Matrix& A, int i) {
-	vector<long double> horizontal(A.m, 0);
-
-	for (int idx = 0; idx < A.elements.size(); idx++) {
-		// Если нашли элемент по вертикали, то в соответствующую горизонтальную ячейку записываем сам элемент
-		if (A.indexI[idx] == i) {
-			// т.к. вектор горизонтальный, то и обращаться нужно к A.indexJ, т.к. этот вектор отвечает за горизонталь
-			horizontal[A.indexJ[idx]] = A.elements[idx] * A.scalar;
-		}
-	}
-
-	return horizontal;
-}
-
-long double multiply_vectors(vector<long double>& a, vector<long double>& b) {
-	long double res = 0;
-
-	for (long double i = 0; i < a.size(); i++) {
-		res += a[i] * b[i];
-	}
-
-	return res;
-}
 
 Matrix multiply_matrix(Matrix& A, Matrix& B) {
 	if (A.m != B.n) {
-		// Обработать описание ошибки
 		cout << "Mistake \n";
 		return A;
 	}
-
-	int new_n = A.n;
-	int new_m = B.m;
-	vector<long double> elements;
-	vector<int> indexI;
-	vector<int> indexJ;
-
-	for (int i = 0; i < new_n; i++)
+	vector<long double> new_values;
+	vector<int> new_col;
+	vector<int> new_rowpointer(A.m + 1, 0);
+	// column values of matrix B
+	map<int, map<int, long double>> column_values;
+	for(int i = 1; i < A.rowpointer.size(); i++)
 	{
-		// что бы не пересчитывать каждый раз, вынес horizontal
-		vector<long double> horizontal = get_horizontal(A, i);
-		for (int j = 0; j < new_m; j++)
+		// string values of matrix A
+		map<int, long double> string_values;
+		get_matrix_string_sum(string_values, A, i);
+
+		for(int j = A.rowpointer[i - 1]; j < A.rowpointer[i]; j++)
 		{
-			vector<long double> vertical = get_vertical(B, j);
-			long double composition = multiply_vectors(horizontal, vertical);
-			if (composition != 0)
+			if(column_values.count(j) == 0)
 			{
-				elements.push_back(composition);
-				indexI.push_back(i);
-				indexJ.push_back(j);
+				// TODO: check this code later
+				get_matrix_column_sum(column_values[j], B, j);
 			}
+			long double new_value = 0;
+			for(pair<int, long double> string_elements : string_values)
+			{
+				int index = string_elements.first;
+				int value = string_elements.second;
+				if(column_values[j].count(index) == 0)
+				{
+					column_values[j][index] = 0;
+				}
+				new_value += value * column_values[j][index];
+			}
+			new_value = new_value * A.scalar * B.scalar;
 		}
 	}
-
-	Matrix C = Matrix(new_n, new_m, elements, indexI, indexJ);
-	return C;
+	return B;
 }
 
 pair<long double, string> get_determinant(Matrix matrix) {
@@ -248,7 +244,7 @@ pair<long double, string> get_determinant(Matrix matrix) {
 
         if (pivot_row != i) {
             swap(temp_matrix[i], temp_matrix[pivot_row]);
-            det = -det; // Меняем знак детерминанта при перестановке строк
+            det = -det;
         }
 
         det *= temp_matrix[i][i];
