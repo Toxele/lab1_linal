@@ -135,7 +135,11 @@ void get_matrix_column_sum(map<int, long double> &column_values, Matrix &matrix,
 {
 	for(int row_index = 0; row_index < matrix.n; row_index++)
 	{
-		column_values[row_index] = matrix.get_element(row_index + 1, col_index);
+		long double element = matrix.get_element(row_index + 1, col_index + 1);
+		if(element != 0)
+		{
+			column_values[row_index] = element;
+		}
 	}
 }
 // TODO: rename this function
@@ -188,39 +192,54 @@ Matrix multiply_matrix(Matrix& A, Matrix& B) {
 		cout << "Mistake \n";
 		return A;
 	}
+	int new_n = A.n;
+	int new_m = B.m;
 	vector<long double> new_values;
 	vector<int> new_col;
-	vector<int> new_rowpointer(A.m + 1, 0);
+	vector<int> new_rowpointer(new_n + 1, 0);
 	// column values of matrix B
 	map<int, map<int, long double>> column_values;
+	// string values of matrix A
+	map<int, map<int, long double>> string_values;
 	for(int i = 1; i < A.rowpointer.size(); i++)
 	{
-		// string values of matrix A
-		map<int, long double> string_values;
-		get_matrix_string_sum(string_values, A, i);
-
-		for(int j = A.rowpointer[i - 1]; j < A.rowpointer[i]; j++)
+		// TODO: check this code later
+		get_matrix_string_sum(string_values[i - 1], A, i);
+	}
+	for(int j = 0; j < B.m; j++)
+	{
+		get_matrix_column_sum(column_values[j], B, j);
+	}
+	for(int i = 0; i < new_n; i++)
+	{
+		int cnt_of_not_zero_elements = 0;
+		for(int j = 0; j < new_m; j++)
 		{
-			if(column_values.count(j) == 0)
-			{
-				// TODO: check this code later
-				get_matrix_column_sum(column_values[j], B, j);
-			}
 			long double new_value = 0;
-			for(pair<int, long double> string_elements : string_values)
+			for(pair<int, long double> string_value : string_values[i])
 			{
-				int index = string_elements.first;
-				int value = string_elements.second;
+				long double value = string_value.second;
+				long double index = string_value.first;
 				if(column_values[j].count(index) == 0)
 				{
-					column_values[j][index] = 0;
+					continue;
 				}
-				new_value += value * column_values[j][index];
+				value *= column_values[j][index];
+				new_value += value;
 			}
 			new_value = new_value * A.scalar * B.scalar;
+			
+			if(new_value != 0)
+			{
+				cnt_of_not_zero_elements++;
+				new_values.push_back(new_value);
+				new_col.push_back(j);
+			}
 		}
+		new_rowpointer[i + 1] = new_rowpointer[i] + cnt_of_not_zero_elements;
 	}
-	return B;
+	Matrix C = Matrix(new_n, new_m, new_values, new_col, new_rowpointer);
+	return C;
 }
 
 pair<long double, string> get_determinant(Matrix matrix) {
